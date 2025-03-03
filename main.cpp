@@ -11,15 +11,14 @@ using namespace std;
 
 struct Server
 {
+    int serverId;
+    int pid;
     string name;
     string path;
     string command;
     bool online;
-    int pid;
     int cpuUsage;
     int memoryUsage;
-    int diskIOUsage;
-    int networkUsage;
 };
 
 void sigchld_handler(int signo)
@@ -33,43 +32,10 @@ bool getAlive(pid_t pid)
     return kill(pid, 0) == 0;
 }
 
-vector<vector<string>> readConfig()
-{
-    // サーバーの設定ファイルを読み込む
-    // 書式
-    vector<vector<string>> servers;
-    ifstream conf("servers.conf");
-    if (!conf)
-    {
-        cerr << "Failed to open servers.conf" << endl;
-        exit(1);
-    }
-    string line;
-    while (getline(conf, line))
-    {
-        if (line.empty())
-            continue; // 空行ならスキップ
-        vector<string> server;
-        string element;
-        for (int i = 0; i < 4; i++)
-        {
-            size_t start = line.find("{{");
-            size_t end = line.find("}}");
-            element = line.substr(start + 2, end - start - 2);
-            line = line.substr(end + 2);
-            server.push_back(element);
-        }
-        servers.push_back(server);
-    }
-    conf.close(); // ファイルを閉じる
-    return servers;
-}
-
 int main()
 {
     // サーバーの設定ファイルを読み込む
     vector<vector<string>> servers;
-    servers = readConfig();
     int P_MAX = servers.size();
     int status[P_MAX];
     int pid[P_MAX];
@@ -87,7 +53,6 @@ int main()
     {
         while (true)
         {
-            servers = readConfig();
             P_MAX = servers.size();
             for (int j = 0; j < P_MAX; j++)
             {
