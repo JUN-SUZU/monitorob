@@ -1,15 +1,26 @@
-#include <iostream>
-#include <fstream>
 #include <csignal>
-#include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <ncurses.h>
 #include <stdlib.h>
-#include <string>
 #include <sys/wait.h>
-#include <sys/resource.h>
-#include <unistd.h>
+#include <string>
 #include <vector>
 using namespace std;
+
+struct Server
+{
+    string name;
+    string path;
+    string command;
+    bool online;
+    int pid;
+    int cpuUsage;
+    int memoryUsage;
+    int diskIOUsage;
+    int networkUsage;
+};
 
 void sigchld_handler(int signo)
 {
@@ -22,58 +33,10 @@ bool getAlive(pid_t pid)
     return kill(pid, 0) == 0;
 }
 
-double GetCPUUsage() {
-    static long prevTotalTime = 0, prevProcTime = 0;
-    long procTime, totalTime;
-    char buf[256];
-    std::ifstream stat("/proc/self/stat");
-    if (!stat) return -1;
-
-    // プロセスのCPU時間を取得
-    stat.getline(buf, sizeof(buf));
-    char* ptr = strtok(buf, " "); // 1列目を飛ばす
-    for (int i = 0; i < 13; i++) ptr = strtok(nullptr, " ");
-    procTime = std::stol(ptr) + std::stol(strtok(nullptr, " ")); // utime + stime
-
-    // システム全体のCPU時間を取得
-    std::ifstream statTotal("/proc/stat");
-    if (!statTotal) return -1;
-
-    totalTime = 0;
-    statTotal.getline(buf, sizeof(buf));
-    ptr = strtok(buf, " "); // "cpu" を飛ばす
-    while ((ptr = strtok(nullptr, " "))) totalTime += std::stol(ptr);
-
-    // 使用率計算
-    double usage = (procTime - prevProcTime) * 100.0 / (totalTime - prevTotalTime);
-    prevProcTime = procTime;
-    prevTotalTime = totalTime;
-
-    return usage;
-}
-
-size_t GetMemoryUsage() {
-    struct rusage usage;
-    if (getrusage(RUSAGE_SELF, &usage) == 0) {
-        return usage.ru_maxrss; // KB単位
-    }
-    return 0;
-}
-
 vector<vector<string>> readConfig()
 {
     // サーバーの設定ファイルを読み込む
     // 書式
-    // 1行に1つのサーバーの設定
-    // 要素はスペース区切り 波かっこ2つで囲む例: {{}} {{}}
-    // 空行を間に挟むとエラーになる
-    // 1列目: サーバーの名前
-    // 2列目: サーバーのルートディレクトリの絶対パス
-    // 3列目: サーバーの起動コマンド(コマンドは/bin不要, ファイル名はフルパス)
-    // 4列目: 設定したいサーバーの状態(0: offline, 1: online)(0でオンラインになっていたら停止する, 1でオフラインになっていたら起動する)
-    // 例
-    // {{server1}} {{/var/www/html}} {{node /var/www/html/index.js}} {{0}}
-    // {{server2}} {{/home/user/projects/app}} {{node /home/jun/projects/app/index.js}} {{1}}
     vector<vector<string>> servers;
     ifstream conf("servers.conf");
     if (!conf)
@@ -132,7 +95,8 @@ int main()
                 if (isAlive && servers[j][3] == "0") // サーバーがオンラインで設定がオフラインなら停止する
                 {
                     cout << "Stopping server: " << servers[j][0] << endl;
-                    kill(pid[j], SIGKILL);
+                    // 孫プロセスまで全てキルする
+                    kill(-pid[j], SIGKILL);
                 }
                 if (!isAlive && servers[j][3] == "1") // サーバーがオフラインで設定がオンラインなら起動する
                 {
@@ -147,6 +111,7 @@ int main()
                             filesystem::current_path(servers[j][1]);
                             string cmd = servers[j][2].substr(0, servers[j][2].find(" "));
                             string arg = servers[j][2].substr(servers[j][2].find(" ") + 1);
+                            setpgid(0, 0);
                             execlp(cmd.c_str(), cmd.c_str(), arg.c_str(), (char *)nullptr);
                         }
                         exit(0);
@@ -166,6 +131,7 @@ int main()
             filesystem::current_path(servers[i][1]);
             string cmd = servers[i][2].substr(0, servers[i][2].find(" "));
             string arg = servers[i][2].substr(servers[i][2].find(" ") + 1);
+            setpgid(0, 0);
             execlp(cmd.c_str(), cmd.c_str(), arg.c_str(), (char *)nullptr);
         }
         exit(0);
