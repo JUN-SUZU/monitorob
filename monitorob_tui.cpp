@@ -184,7 +184,8 @@ int main() {
 
             // ★ 選択行の配色を「背景青＋文字白」で固定して見やすくする（invertedの廃止）
             if (i == selected_index) {
-                e_name   = text(" " + p.name)                         | bgcolor(Color::Blue) | color(Color::White) | bold;
+                // 【追加】 focus デコレーターを付与することで、yframe がこの行にスクロールを合わせます
+                e_name   = text(" " + p.name)                         | bgcolor(Color::Blue) | color(Color::White) | bold | focus;
                 e_state  = text(p.status)                             | bgcolor(Color::Blue) | color(Color::White) | bold;
                 e_auto   = text(p.auto_start ? "[ON] " : "[OFF]")     | bgcolor(Color::Blue) | color(Color::White);
                 e_pid    = text(p.pid != -1 ? to_string(p.pid) : "-") | bgcolor(Color::Blue) | color(Color::White);
@@ -206,7 +207,8 @@ int main() {
         return vbox(Elements{
             hbox(Elements{ filler(), text(" monitorob Dashboard ") | bold | color(Color::White), filler() }) | bgcolor(Color::Blue),
             separator() | color(Color::GrayDark),
-            table.Render() | flex, 
+            // 【追加】 vscroll_indicator と yframe を組み合わせてスクロール可能にし、潰れを防ぎます
+            table.Render() | vscroll_indicator | yframe | flex, 
             separator() | color(Color::GrayDark),
             
             hbox(Elements{ 
